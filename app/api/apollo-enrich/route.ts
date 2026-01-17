@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     if (!parsedBody.success) {
       return NextResponse.json(
         { error: parsedBody.error.message },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -35,20 +35,24 @@ export async function POST(request: Request) {
     if (!process.env.APOLLO_API_KEY) {
       return NextResponse.json(
         { error: "Apollo API key not configured" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
     // Process companies sequentially with rate limiting
     const results = [];
 
-    console.log(`\n🚀 Starting Apollo enrichment for ${Math.min(companies.length, limit)} companies...`);
+    console.log(
+      `Starting Apollo enrichment for ${Math.min(companies.length, limit)} companies...`,
+    );
 
     for (let i = 0; i < Math.min(companies.length, limit); i++) {
       const company = companies[i];
       const domain = extractDomain(company.url);
 
-      console.log(`\n[${i + 1}/${Math.min(companies.length, limit)}] Processing: ${company.title}`);
+      console.log(
+        `\n[${i + 1}/${Math.min(companies.length, limit)}] Processing: ${company.title}`,
+      );
       console.log(`URL: ${company.url}`);
       console.log(`Extracted domain: ${domain}`);
 
@@ -72,7 +76,9 @@ export async function POST(request: Request) {
 
         // Step 2: If contacts found, enrich them to get emails and phone numbers
         if (contacts.length > 0) {
-          console.log(`📧 Enriching ${contacts.length} contacts to get emails & phones...`);
+          console.log(
+            `📧 Enriching ${contacts.length} contacts to get emails & phones...`,
+          );
 
           try {
             // Batch contacts into groups of 10 (API limit)
@@ -83,7 +89,11 @@ export async function POST(request: Request) {
 
             // Enrich each batch
             const allEnrichedContacts = [];
-            for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+            for (
+              let batchIndex = 0;
+              batchIndex < batches.length;
+              batchIndex++
+            ) {
               const batch = batches[batchIndex];
               const peopleToEnrich = batch.map((c) => ({
                 id: c.id,
@@ -102,9 +112,14 @@ export async function POST(request: Request) {
             }
 
             enrichedContacts = allEnrichedContacts;
-            console.log(`✅ Enriched ${enrichedContacts.length} contacts with full details`);
+            console.log(
+              `✅ Enriched ${enrichedContacts.length} contacts with full details`,
+            );
           } catch (enrichError) {
-            console.error(`⚠️ Enrichment failed, returning basic contact info:`, enrichError);
+            console.error(
+              `⚠️ Enrichment failed, returning basic contact info:`,
+              enrichError,
+            );
             // Continue with non-enriched contacts if enrichment fails
           }
         }
@@ -119,7 +134,9 @@ export async function POST(request: Request) {
           organization_name: contact.organization_name || undefined,
         }));
 
-        console.log(`✅ Found ${transformedContacts.length} contacts for ${company.title}`);
+        console.log(
+          `✅ Found ${transformedContacts.length} contacts for ${company.title}`,
+        );
 
         // Step 3: If phone enrichment is requested and we have contacts, trigger webhook
         let phoneJobId: string | undefined;
@@ -129,10 +146,13 @@ export async function POST(request: Request) {
             phoneJobId = randomUUID();
 
             // Build webhook URL
-            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+            const baseUrl =
+              process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
             const webhookUrl = `${baseUrl}/api/apollo-webhook?jobId=${phoneJobId}`;
 
-            console.log(`📱 Initiating phone enrichment for ${enrichedContacts.length} contacts...`);
+            console.log(
+              `📱 Initiating phone enrichment for ${enrichedContacts.length} contacts...`,
+            );
             console.log(`Webhook URL: ${webhookUrl}`);
 
             // Create job in store
@@ -140,7 +160,7 @@ export async function POST(request: Request) {
               phoneJobId,
               company.url,
               company.title,
-              enrichedContacts.map(c => c.id)
+              enrichedContacts.map((c) => c.id),
             );
 
             // Trigger async phone enrichment
@@ -150,7 +170,10 @@ export async function POST(request: Request) {
               last_name: c.last_name,
             }));
 
-            await apollo.bulkEnrichPhonesWithWebhook(peopleToEnrich, webhookUrl);
+            await apollo.bulkEnrichPhonesWithWebhook(
+              peopleToEnrich,
+              webhookUrl,
+            );
 
             console.log(`✅ Phone enrichment job ${phoneJobId} created`);
           } catch (phoneError) {
@@ -178,22 +201,24 @@ export async function POST(request: Request) {
           url: company.url,
           contacts: [],
           error:
-            error instanceof Error
-              ? error.message
-              : "Failed to fetch contacts",
+            error instanceof Error ? error.message : "Failed to fetch contacts",
         });
       }
     }
 
-    console.log(`\n✨ Enrichment complete! Total companies processed: ${results.length}`);
-    console.log(`Companies with contacts: ${results.filter(r => r.contacts.length > 0).length}`);
+    console.log(
+      `\n✨ Enrichment complete! Total companies processed: ${results.length}`,
+    );
+    console.log(
+      `Companies with contacts: ${results.filter((r) => r.contacts.length > 0).length}`,
+    );
 
     return NextResponse.json({ results });
   } catch (error) {
     console.error("Apollo enrichment error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Enrichment failed" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

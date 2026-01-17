@@ -35,13 +35,13 @@ cd exa-apollo-enrichment
 2. Install dependencies:
 
 ```bash
-pnpm install
+npm install
 ```
 
 3. Set up environment variables:
 
 ```bash
-cp .env.example .env.local
+cp .env.example 
 ```
 
 Configure the following variables:
@@ -52,12 +52,15 @@ EXA_API_KEY=your_exa_api_key
 
 # Apollo API Key
 APOLLO_API_KEY=your_apollo_api_key
+
+# Vercel AI Gateway Key
+If you're deploying
 ```
 
 4. Run the development server:
 
 ```bash
-pnpm dev
+npm run dev
 ```
 
 5. Open [http://localhost:3000](http://localhost:3000) to start searching.
@@ -85,6 +88,10 @@ exa-apollo-enrichment/
 3. Adjust the enrichment slider to select how many companies to enrich
 4. Click "Enrich with Apollo" to find contacts
 5. Click "Export to CSV" to download results
+
+## Next Steps
+
+Phone enrichment exists but is not yet implemented. This utilizes the Apollo Person Enrichment API to add phone numbers (if applicable) to each person. This requires more credits / is a separate API call.
 
 ## License
 
