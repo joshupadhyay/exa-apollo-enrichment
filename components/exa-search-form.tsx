@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -10,14 +10,16 @@ import {
   FieldLabel
 } from '@/components/ui/field';
 import { toast } from 'sonner';
-import { Download, Users } from 'lucide-react';
+import { Download, Users, Phone } from 'lucide-react';
 import type {
   ExaSearchResponse,
   ExaSearchResult,
   EnrichedExaResult,
-  ApolloEnrichResponse
+  ApolloEnrichResponse,
+  ApolloContact
 } from '@/lib/types';
 import { Slider } from '@/components/ui/slider';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const DEFAULT_QUERY = 'list of 100 companies that have a trust center';
 
@@ -31,6 +33,9 @@ export function ExaSearchForm() {
   const [enrichedResults, setEnrichedResults] = useState<EnrichedExaResult[] | null>(
     null
   );
+  const [selectedCompanies, setSelectedCompanies] = useState<Set<string>>(new Set());
+  const [isPhoneEnriching, setIsPhoneEnriching] = useState(false);
+  const [phoneEnrichmentJobs, setPhoneEnrichmentJobs] = useState<Map<string, string>>(new Map()); // url -> jobId
 
   async function handleSearch() {
     if (!query.trim()) {
@@ -74,6 +79,32 @@ export function ExaSearchForm() {
       return `"${escaped}"`;
     }
     return escaped;
+  }
+
+  function toggleCompanySelection(url: string) {
+    setSelectedCompanies((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(url)) {
+        newSet.delete(url);
+      } else {
+        newSet.add(url);
+      }
+      return newSet;
+    });
+  }
+
+  function toggleAllCompanies() {
+    const displayedResults = enrichedResults || results;
+    if (!displayedResults) return;
+
+    const allUrls = displayedResults.map((r) => r.url);
+    if (selectedCompanies.size === allUrls.length) {
+      // Deselect all
+      setSelectedCompanies(new Set());
+    } else {
+      // Select all
+      setSelectedCompanies(new Set(allUrls));
+    }
   }
 
   async function handleApolloEnrich() {
@@ -130,6 +161,129 @@ export function ExaSearchForm() {
     } finally {
       setIsEnriching(false);
     }
+  }
+
+  async function handlePhoneEnrichment() {
+    if (!enrichedResults || selectedCompanies.size === 0) {
+      toast.error('Please select companies to enrich with phone data');
+      return;
+    }
+
+    setIsPhoneEnriching(true);
+    setError(null);
+
+    try {
+      // Filter selected companies from enriched results
+      const selectedCompaniesToEnrich = enrichedResults
+        .filter((r) => selectedCompanies.has(r.url))
+        .map((r) => ({ title: r.title, url: r.url }));
+
+      // Call Apollo API with phone enrichment enabled
+      const response = await fetch('/api/apollo-enrich', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companies: selectedCompaniesToEnrich,
+          limit: selectedCompaniesToEnrich.length,
+          includePhones: true
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Phone enrichment failed');
+      }
+
+      const data: any = await response.json();
+
+      // Track phone job IDs
+      const newPhoneJobs = new Map(phoneEnrichmentJobs);
+      data.results.forEach((result: any) => {
+        if (result.phoneJobId) {
+          newPhoneJobs.set(result.url, result.phoneJobId);
+        }
+      });
+      setPhoneEnrichmentJobs(newPhoneJobs);
+
+      toast.success(
+        `Phone enrichment started for ${selectedCompanies.size} ${
+          selectedCompanies.size === 1 ? 'company' : 'companies'
+        }. Phone numbers will appear shortly.`
+      );
+
+      // Start polling for phone data
+      pollPhoneEnrichmentStatus(newPhoneJobs);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Phone enrichment failed';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsPhoneEnriching(false);
+    }
+  }
+
+  async function pollPhoneEnrichmentStatus(jobMap: Map<string, string>) {
+    const maxPolls = 60; // Poll for up to 60 seconds (60 polls * 1 second)
+    let pollCount = 0;
+
+    const poll = async () => {
+      if (pollCount >= maxPolls) {
+        console.log('Stopped polling after maximum attempts');
+        return;
+      }
+
+      pollCount++;
+      let anyPending = false;
+
+      for (const [url, jobId] of jobMap.entries()) {
+        try {
+          const response = await fetch(`/api/phone-enrichment-status/${jobId}`);
+          if (!response.ok) continue;
+
+          const data = await response.json();
+
+          if (data.status === 'completed' && data.contacts) {
+            // Update enriched results with phone numbers
+            setEnrichedResults((prev) => {
+              if (!prev) return prev;
+              return prev.map((result) => {
+                if (result.url === url) {
+                  // Merge phone numbers into existing contacts
+                  const updatedContacts = (result.apolloContacts || []).map(
+                    (contact) => {
+                      const enrichedContact = data.contacts.find(
+                        (c: ApolloContact) =>
+                          c.name === contact.name || c.email === contact.email
+                      );
+                      return enrichedContact
+                        ? { ...contact, phone: enrichedContact.phone }
+                        : contact;
+                    }
+                  );
+                  return { ...result, apolloContacts: updatedContacts };
+                }
+                return result;
+              });
+            });
+
+            // Remove from job map
+            jobMap.delete(url);
+          } else if (data.status === 'pending') {
+            anyPending = true;
+          }
+        } catch (error) {
+          console.error(`Error polling job ${jobId}:`, error);
+        }
+      }
+
+      // Continue polling if there are pending jobs
+      if (anyPending && jobMap.size > 0) {
+        setTimeout(poll, 1000); // Poll every 1 second
+      }
+    };
+
+    // Start polling
+    poll();
   }
 
   function handleExportCSV() {
@@ -297,6 +451,42 @@ export function ExaSearchForm() {
         </div>
       )}
 
+      {/* Phone Enrichment Controls */}
+      {enrichedResults && enrichedResults.length > 0 && (
+        <div className="space-y-4 border rounded-lg p-6 bg-muted/50">
+          <div className="flex items-center gap-2">
+            <Phone className="h-5 w-5" />
+            <h3 className="text-lg font-semibold">Enrich with Phone Data</h3>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Select companies to enrich with phone numbers. Phone data will be fetched asynchronously.
+          </p>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={
+                selectedCompanies.size > 0 &&
+                selectedCompanies.size === enrichedResults.length
+              }
+              onCheckedChange={toggleAllCompanies}
+            />
+            <label className="text-sm font-medium cursor-pointer" onClick={toggleAllCompanies}>
+              Select all companies ({selectedCompanies.size} selected)
+            </label>
+          </div>
+          <Button
+            onClick={handlePhoneEnrichment}
+            disabled={isPhoneEnriching || selectedCompanies.size === 0}
+            className="w-full sm:w-auto"
+          >
+            {isPhoneEnriching
+              ? 'Enriching...'
+              : `Enrich ${selectedCompanies.size} ${
+                  selectedCompanies.size === 1 ? 'Company' : 'Companies'
+                } with Phone Data`}
+          </Button>
+        </div>
+      )}
+
       {/* Results Section */}
       {(enrichedResults || results) && (enrichedResults || results)!.length > 0 && (
         <div className="space-y-4">
@@ -318,14 +508,32 @@ export function ExaSearchForm() {
           <div className="grid gap-4">
             {(enrichedResults || results)!.map((result, index) => {
               const enrichedResult = result as EnrichedExaResult;
+              const isSelected = selectedCompanies.has(result.url);
+              const hasPhoneJob = phoneEnrichmentJobs.has(result.url);
               return (
               <div
                 key={result.url || index}
                 className="border rounded-lg p-4 space-y-2 hover:shadow-md transition-shadow"
               >
-                {/* Company Name/Title */}
+                {/* Company Name/Title with Checkbox */}
                 <div className="flex items-start justify-between gap-4">
-                  <h3 className="font-semibold text-lg">{result.title}</h3>
+                  <div className="flex items-start gap-3 flex-1">
+                    {enrichedResults && (
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleCompanySelection(result.url)}
+                        className="mt-1"
+                      />
+                    )}
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-lg">{result.title}</h3>
+                      {hasPhoneJob && (
+                        <span className="text-xs text-muted-foreground">
+                          ⏳ Phone enrichment in progress...
+                        </span>
+                      )}
+                    </div>
+                  </div>
                   {result.score && (
                     <span className="text-sm text-muted-foreground">
                       Score: {result.score.toFixed(2)}
@@ -416,6 +624,14 @@ export function ExaSearchForm() {
                                 className="text-xs text-primary hover:underline block"
                               >
                                 {contact.email}
+                              </a>
+                            )}
+                            {contact.phone && (
+                              <a
+                                href={`tel:${contact.phone}`}
+                                className="text-xs text-primary hover:underline block"
+                              >
+                                📞 {contact.phone}
                               </a>
                             )}
                             {contact.linkedin_url && (

@@ -147,7 +147,7 @@ export async function POST(request: Request) {
 
             // Build webhook URL
             const baseUrl =
-              process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+              process.env.PUBLIC_BASE_URL || "http://localhost:3000";
             const webhookUrl = `${baseUrl}/api/apollo-webhook?jobId=${phoneJobId}`;
 
             console.log(
