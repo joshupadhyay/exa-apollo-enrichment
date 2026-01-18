@@ -1,12 +1,18 @@
+import { describe, it, expect, beforeEach, mock } from 'bun:test';
 import { GET } from '@/app/api/phone-enrichment-status/[jobId]/route';
-import { phoneEnrichmentStore } from '@/lib/phone-enrichment-store';
 
 // Mock dependencies
-jest.mock('@/lib/phone-enrichment-store');
+const mockGetJob = mock(() => undefined);
+
+mock.module('@/lib/phone-enrichment-store', () => ({
+  phoneEnrichmentStore: {
+    getJob: mockGetJob,
+  },
+}));
 
 describe('/api/phone-enrichment-status/[jobId]', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    mockGetJob.mockClear();
   });
 
   it('should return job status when job exists', async () => {
@@ -31,7 +37,7 @@ describe('/api/phone-enrichment-status/[jobId]', () => {
       completedAt: Date.now(),
     };
 
-    (phoneEnrichmentStore.getJob as jest.Mock).mockReturnValue(mockJob);
+    mockGetJob.mockReturnValue(mockJob);
 
     const request = new Request(
       `http://localhost:3000/api/phone-enrichment-status/${mockJobId}`
@@ -49,7 +55,7 @@ describe('/api/phone-enrichment-status/[jobId]', () => {
 
   it('should return 404 when job does not exist', async () => {
     const mockJobId = 'non-existent-job';
-    (phoneEnrichmentStore.getJob as jest.Mock).mockReturnValue(undefined);
+    mockGetJob.mockReturnValue(undefined);
 
     const request = new Request(
       `http://localhost:3000/api/phone-enrichment-status/${mockJobId}`
@@ -75,7 +81,7 @@ describe('/api/phone-enrichment-status/[jobId]', () => {
       createdAt: Date.now(),
     };
 
-    (phoneEnrichmentStore.getJob as jest.Mock).mockReturnValue(mockJob);
+    mockGetJob.mockReturnValue(mockJob);
 
     const request = new Request(
       `http://localhost:3000/api/phone-enrichment-status/${mockJobId}`

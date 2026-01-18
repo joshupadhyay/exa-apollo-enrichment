@@ -128,7 +128,7 @@ Receives phone enrichment data from Apollo.io webhook.
 
 Required:
 - `APOLLO_API_KEY`: Your Apollo.io API key
-- `NEXT_PUBLIC_BASE_URL`: Base URL for webhook callbacks (e.g., https://yourdomain.com)
+- `PUBLIC_BASE_URL`: Base URL for webhook callbacks (e.g., https://yourdomain.com)
 
 ## Testing
 

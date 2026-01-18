@@ -1,14 +1,32 @@
+import { describe, it, expect, beforeEach, mock, spyOn } from 'bun:test';
 import { POST } from '@/app/api/apollo-enrich/route';
-import { apollo } from '@/lib/apollo';
-import { phoneEnrichmentStore } from '@/lib/phone-enrichment-store';
 
-// Mock dependencies
-jest.mock('@/lib/apollo');
-jest.mock('@/lib/phone-enrichment-store');
+// Mock modules
+const mockSearchPeople = mock(() => Promise.resolve([]));
+const mockBulkEnrichPeople = mock(() => Promise.resolve([]));
+const mockBulkEnrichPhonesWithWebhook = mock(() => Promise.resolve(undefined));
+const mockCreateJob = mock(() => {});
+
+mock.module('@/lib/apollo', () => ({
+  apollo: {
+    searchPeople: mockSearchPeople,
+    bulkEnrichPeople: mockBulkEnrichPeople,
+    bulkEnrichPhonesWithWebhook: mockBulkEnrichPhonesWithWebhook,
+  },
+}));
+
+mock.module('@/lib/phone-enrichment-store', () => ({
+  phoneEnrichmentStore: {
+    createJob: mockCreateJob,
+  },
+}));
 
 describe('/api/apollo-enrich', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    mockSearchPeople.mockClear();
+    mockBulkEnrichPeople.mockClear();
+    mockBulkEnrichPhonesWithWebhook.mockClear();
+    mockCreateJob.mockClear();
     process.env.APOLLO_API_KEY = 'test-api-key';
   });
 
@@ -27,8 +45,8 @@ describe('/api/apollo-enrich', () => {
       },
     ];
 
-    (apollo.searchPeople as jest.Mock).mockResolvedValue(mockContacts);
-    (apollo.bulkEnrichPeople as jest.Mock).mockResolvedValue(mockContacts);
+    mockSearchPeople.mockResolvedValue(mockContacts);
+    mockBulkEnrichPeople.mockResolvedValue(mockContacts);
 
     const request = new Request('http://localhost:3000/api/apollo-enrich', {
       method: 'POST',
@@ -64,10 +82,10 @@ describe('/api/apollo-enrich', () => {
       },
     ];
 
-    (apollo.searchPeople as jest.Mock).mockResolvedValue(mockContacts);
-    (apollo.bulkEnrichPeople as jest.Mock).mockResolvedValue(mockContacts);
-    (apollo.bulkEnrichPhonesWithWebhook as jest.Mock).mockResolvedValue(undefined);
-    (phoneEnrichmentStore.createJob as jest.Mock).mockImplementation(() => {});
+    mockSearchPeople.mockResolvedValue(mockContacts);
+    mockBulkEnrichPeople.mockResolvedValue(mockContacts);
+    mockBulkEnrichPhonesWithWebhook.mockResolvedValue(undefined);
+    mockCreateJob.mockImplementation(() => {});
 
     const request = new Request('http://localhost:3000/api/apollo-enrich', {
       method: 'POST',
@@ -83,8 +101,8 @@ describe('/api/apollo-enrich', () => {
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(apollo.bulkEnrichPhonesWithWebhook).toHaveBeenCalled();
-    expect(phoneEnrichmentStore.createJob).toHaveBeenCalled();
+    expect(mockBulkEnrichPhonesWithWebhook).toHaveBeenCalled();
+    expect(mockCreateJob).toHaveBeenCalled();
     expect(data.results[0].phoneJobId).toBeDefined();
   });
 

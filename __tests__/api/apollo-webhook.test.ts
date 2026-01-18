@@ -1,12 +1,18 @@
+import { describe, it, expect, beforeEach, mock } from 'bun:test';
 import { POST } from '@/app/api/apollo-webhook/route';
-import { phoneEnrichmentStore } from '@/lib/phone-enrichment-store';
 
 // Mock dependencies
-jest.mock('@/lib/phone-enrichment-store');
+const mockUpdateJob = mock(() => {});
+
+mock.module('@/lib/phone-enrichment-store', () => ({
+  phoneEnrichmentStore: {
+    updateJob: mockUpdateJob,
+  },
+}));
 
 describe('/api/apollo-webhook', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    mockUpdateJob.mockClear();
   });
 
   it('should process webhook and update job with contacts', async () => {
@@ -30,7 +36,7 @@ describe('/api/apollo-webhook', () => {
       ],
     };
 
-    (phoneEnrichmentStore.updateJob as jest.Mock).mockImplementation(() => {});
+    mockUpdateJob.mockImplementation(() => {});
 
     const request = new Request(
       `http://localhost:3000/api/apollo-webhook?jobId=${mockJobId}`,
@@ -46,7 +52,7 @@ describe('/api/apollo-webhook', () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(phoneEnrichmentStore.updateJob).toHaveBeenCalledWith(
+    expect(mockUpdateJob).toHaveBeenCalledWith(
       mockJobId,
       expect.arrayContaining([
         expect.objectContaining({
@@ -74,7 +80,7 @@ describe('/api/apollo-webhook', () => {
 
   it('should handle empty matches array', async () => {
     const mockJobId = 'test-job-id';
-    (phoneEnrichmentStore.updateJob as jest.Mock).mockImplementation(() => {});
+    mockUpdateJob.mockImplementation(() => {});
 
     const request = new Request(
       `http://localhost:3000/api/apollo-webhook?jobId=${mockJobId}`,
@@ -90,6 +96,6 @@ describe('/api/apollo-webhook', () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(phoneEnrichmentStore.updateJob).toHaveBeenCalledWith(mockJobId, []);
+    expect(mockUpdateJob).toHaveBeenCalledWith(mockJobId, []);
   });
 });
