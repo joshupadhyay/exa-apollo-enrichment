@@ -223,7 +223,7 @@ export function ExaSearchForm() {
   }
 
   async function pollPhoneEnrichmentStatus(jobMap: Map<string, string>) {
-    const maxPolls = 60; // Poll for up to 60 seconds (60 polls * 1 second)
+    const maxPolls = 30; // Poll for up to 5 minutes (30 polls * 10 seconds)
     let pollCount = 0;
 
     const poll = async () => {
@@ -278,7 +278,7 @@ export function ExaSearchForm() {
 
       // Continue polling if there are pending jobs
       if (anyPending && jobMap.size > 0) {
-        setTimeout(poll, 1000); // Poll every 1 second
+        setTimeout(poll, 10000); // Poll every 10 seconds
       }
     };
 
@@ -528,9 +528,10 @@ export function ExaSearchForm() {
                     <div className="flex-1">
                       <h3 className="font-semibold text-lg">{result.title}</h3>
                       {hasPhoneJob && (
-                        <span className="text-xs text-muted-foreground">
-                          ⏳ Phone enrichment in progress...
-                        </span>
+                        <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 rounded-full text-sm font-medium animate-pulse">
+                          <Phone className="h-4 w-4" />
+                          Phone Enrichment in progress...
+                        </div>
                       )}
                     </div>
                   </div>
