@@ -22,10 +22,11 @@ export async function POST(request: Request) {
     // Parse Apollo's webhook payload
     const data: any = await request.json();
 
-    console.log(`Matches in payload: ${data.matches?.length || 0}`);
+    console.log(`People in payload: ${data.people?.length || 0}`);
 
-    // Transform Apollo matches to ApolloContact format
-    const enrichedContacts: ApolloContact[] = (data.matches || []).map(
+    // Transform Apollo people to ApolloContact format
+    // Note: Apollo webhook uses 'people' array, not 'matches'
+    const enrichedContacts: ApolloContact[] = (data.people || []).map(
       (match: any) => ({
         name: `${match.first_name || ""} ${match.last_name || ""}`.trim(),
         email: match.email || undefined,
